@@ -21,13 +21,24 @@ struct log_msg
         level(l),
         raw(),
         formatted() {}
+    log_msg(level::level_enum l, int line, std::string file, std::string function):
+        logger_name(),
+        level(l),
+        function_name(function),
+        source_file(file),
+        source_file_line(line),
+        raw(),
+        formatted() {}
 
 
     log_msg(const log_msg& other) :
         logger_name(other.logger_name),
         level(other.level),
         time(other.time),
-        thread_id(other.thread_id)
+        thread_id(other.thread_id),
+        function_name(other.function_name),
+        source_file(other.source_file),
+        source_file_line(other.source_file_line)
     {
         if (other.raw.size())
             raw << fmt::BasicStringRef<char>(other.raw.data(), other.raw.size());
@@ -40,6 +51,9 @@ struct log_msg
         level(other.level),
         time(std::move(other.time)),
         thread_id(other.thread_id),
+        function_name(other.function_name),
+        source_file(other.source_file),
+        source_file_line(other.source_file_line),
         raw(std::move(other.raw)),
         formatted(std::move(other.formatted))
     {
@@ -55,6 +69,9 @@ struct log_msg
         level = other.level;
         time = std::move(other.time);
         thread_id = other.thread_id;
+        function_name = std::move(other.function_name);
+        source_file = std::move(other.source_file);
+        source_file_line = other.source_file_line;
         raw = std::move(other.raw);
         formatted = std::move(other.formatted);
         other.clear();
@@ -72,6 +89,9 @@ struct log_msg
     level::level_enum level;
     log_clock::time_point time;
     size_t thread_id;
+    std::string function_name;
+    std::string source_file;
+    int source_file_line;
     fmt::MemoryWriter raw;
     fmt::MemoryWriter formatted;
 };

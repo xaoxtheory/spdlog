@@ -438,6 +438,26 @@ class full_formatter :public flag_formatter
     }
 };
 
+
+//Function name
+class g_formatter :public flag_formatter
+{
+    void format(details::log_msg& msg, const std::tm&) override
+    {
+        msg.formatted << msg.function_name;
+    }
+};
+
+
+//Source file and line
+class G_formatter :public flag_formatter
+{
+    void format(details::log_msg& msg, const std::tm&) override
+    {
+        if (!msg.source_file.empty())
+            msg.formatted << msg.source_file << ":" << msg.source_file_line;
+    }
+};
 }
 }
 ///////////////////////////////////////////////////////////////////////////////
@@ -590,6 +610,14 @@ inline void spdlog::pattern_formatter::handle_flag(char flag)
 
     case('z') :
         _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::z_formatter()));
+        break;
+
+    case('g') :
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::g_formatter()));
+        break;
+
+    case('G') :
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::G_formatter()));
         break;
 
     case ('+'):

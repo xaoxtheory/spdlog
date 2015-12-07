@@ -22,6 +22,11 @@ public:
         _log_msg(msg_level),
         _enabled(enabled)
     {}
+    line_logger(logger* callback_logger, level::level_enum msg_level, int line, std::string file, std::string function, bool enabled):
+        _callback_logger(callback_logger),
+        _log_msg(msg_level, line, file, function),
+        _enabled(enabled)
+    {}
 
     // No copy intended. Only move
     line_logger(const line_logger& other) = delete;
@@ -82,6 +87,13 @@ public:
         }
     }
 
+    // Support for function name and source line and number
+    void set_log_location(std::string function, std::string file, int line)
+    {
+        _log_msg.function_name = function;
+        _log_msg.source_file = file;
+        _log_msg.source_file_line = line;
+    }
 
     //
     // Support for operator<<
