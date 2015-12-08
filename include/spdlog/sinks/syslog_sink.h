@@ -64,7 +64,7 @@ public:
     }
 
 
-private:
+protected:
     std::array<int, 10> _priorities;
     //must store the ident because the man says openlog might use the pointer as is and not a string copy
     const std::string _ident;
