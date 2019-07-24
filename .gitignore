@@ -1,8 +1,19 @@
-# Compiled Object files
+# Auto generated files
+build/*
 *.slo
 *.lo
 *.o
 *.obj
+*.suo
+*.tlog
+*.ilk
+*.log
+*.pdb
+*.idb
+*.iobj
+*.ipdb
+*.opensdf
+*.sdf
 
 # Compiled Dynamic libraries
 *.so
@@ -23,14 +34,40 @@
 # Codelite
 .codelite
 
+# KDevelop
+*.kdev4
+
 # .orig files
 *.orig
 
 # example  files
 example/*
 !example/example.cpp
+!example/bench.cpp
 !example/utils.h
-!example/makefile
-!example/makefile.clang
+!example/Makefile*
+!example/example.sln
+!example/example.vcxproj
+!example/CMakeLists.txt
+!example/meson.build
+!example/multisink.cpp
+!example/jni
 
+# generated files
+generated
 
+# Cmake
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Makefile
+cmake_install.cmake
+install_manifest.txt
+/tests/tests.VC.VC.opendb
+/tests/tests.VC.db
+/tests/tests
+/tests/logs/*
+
+# idea
+.idea/
+cmake-build-*/

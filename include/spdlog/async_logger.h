@@ -1,72 +1,69 @@
-//
-// Copyright(c) 2015 Gabi Melman.
+// Copyright(c) 2015-present, Gabi Melman & spdlog contributors.
 // Distributed under the MIT License (http://opensource.org/licenses/MIT)
-//
 
 #pragma once
 
-// Very fast asynchronous logger (millions of logs per second on an average desktop)
-// Uses pre allocated lockfree queue for maximum throughput even under large number of threads.
+// Fast asynchronous logger.
+// Uses pre allocated queue.
 // Creates a single back thread to pop messages from the queue and log them.
 //
 // Upon each log write the logger:
 //    1. Checks if its log level is enough to log the message
-//    2. Push a new copy of the message to a queue (or block the caller until space is available in the queue)
-//    3. will throw spdlog_ex upon log exceptions
-// Upong destruction, logs all remaining messages in the queue before destructing..
+//    2. Push a new copy of the message to a queue (or block the caller until
+//    space is available in the queue)
+// Upon destruction, logs all remaining messages in the queue before
+// destructing..
 
-#include <chrono>
-#include <functional>
-#include "common.h"
-#include "logger.h"
-#include "spdlog.h"
+#include "spdlog/logger.h"
 
+namespace spdlog {
 
-namespace spdlog
+// Async overflow policy - block by default.
+enum class async_overflow_policy
 {
+    block,         // Block until message can be enqueued
+    overrun_oldest // Discard oldest message in the queue if full when trying to
+                   // add new item.
+};
 
-namespace details
-{
-class async_log_helper;
+namespace details {
+class thread_pool;
 }
 
-class async_logger :public logger
+class async_logger final : public std::enable_shared_from_this<async_logger>, public logger
 {
+    friend class details::thread_pool;
+
 public:
-    template<class It>
-    async_logger(const std::string& name,
-                 const It& begin,
-                 const It& end,
-                 size_t queue_size,
-                 const async_overflow_policy overflow_policy =  async_overflow_policy::block_retry,
-                 const std::function<void()>& worker_warmup_cb = nullptr,
-                 const std::chrono::milliseconds& flush_interval_ms = std::chrono::milliseconds::zero());
+    template<typename It>
+    async_logger(std::string logger_name, It begin, It end, std::weak_ptr<details::thread_pool> tp,
+        async_overflow_policy overflow_policy = async_overflow_policy::block)
+        : logger(std::move(logger_name), begin, end)
+        , thread_pool_(std::move(tp))
+        , overflow_policy_(overflow_policy)
+    {}
 
-    async_logger(const std::string& logger_name,
-                 sinks_init_list sinks,
-                 size_t queue_size,
-                 const async_overflow_policy overflow_policy = async_overflow_policy::block_retry,
-                 const std::function<void()>& worker_warmup_cb = nullptr,
-                 const std::chrono::milliseconds& flush_interval_ms = std::chrono::milliseconds::zero());
+    async_logger(std::string logger_name, sinks_init_list sinks_list, std::weak_ptr<details::thread_pool> tp,
+        async_overflow_policy overflow_policy = async_overflow_policy::block);
 
-    async_logger(const std::string& logger_name,
-                 sink_ptr single_sink,
-                 size_t queue_size,
-                 const async_overflow_policy overflow_policy =  async_overflow_policy::block_retry,
-                 const std::function<void()>& worker_warmup_cb = nullptr,
-                 const std::chrono::milliseconds& flush_interval_ms = std::chrono::milliseconds::zero());
+    async_logger(std::string logger_name, sink_ptr single_sink, std::weak_ptr<details::thread_pool> tp,
+        async_overflow_policy overflow_policy = async_overflow_policy::block);
 
+    std::shared_ptr<logger> clone(std::string new_name) override;
 
-    void flush() override;
 protected:
-    void _log_msg(details::log_msg& msg) override;
-    void _set_formatter(spdlog::formatter_ptr msg_formatter) override;
-    void _set_pattern(const std::string& pattern) override;
+    void sink_it_(details::log_msg &msg) override;
+    void flush_() override;
+
+    void backend_log_(const details::log_msg &incoming_log_msg);
+    void backend_flush_();
 
 private:
-    std::unique_ptr<details::async_log_helper> _async_log_helper;
+    std::weak_ptr<details::thread_pool> thread_pool_;
+    async_overflow_policy overflow_policy_;
 };
-}
+} // namespace spdlog
 
-
-#include "./details/async_logger_impl.h"
+#ifdef SPDLOG_HEADER_ONLY
+#include "async_logger-inl.h"
+#endif

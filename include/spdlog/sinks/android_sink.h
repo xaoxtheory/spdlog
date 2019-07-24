@@ -1,59 +1,79 @@
-//
-// Copyright(c) 2015 Gabi Melman.
+// Copyright(c) 2015-present, Gabi Melman & spdlog contributors.
 // Distributed under the MIT License (http://opensource.org/licenses/MIT)
-//
 
 #pragma once
 
-#if defined(__ANDROID__)
+#ifdef __ANDROID__
 
-#include <mutex>
-#include "base_sink.h"
-#include "../details/null_mutex.h"
+#include "spdlog/details/fmt_helper.h"
+#include "spdlog/details/null_mutex.h"
+#include "spdlog/details/os.h"
+#include "spdlog/sinks/base_sink.h"
+#include "spdlog/details/synchronous_factory.h"
 
 #include <android/log.h>
+#include <chrono>
+#include <mutex>
+#include <string>
+#include <thread>
 
-namespace spdlog
-{
-namespace sinks
-{
+#if !defined(SPDLOG_ANDROID_RETRIES)
+#define SPDLOG_ANDROID_RETRIES 2
+#endif
+
+namespace spdlog {
+namespace sinks {
+
 /*
-* Android sink (logging using __android_log_write)
-*/
-template<class Mutex>
-class base_android_sink : public base_sink < Mutex >
+ * Android sink (logging using __android_log_write)
+ */
+template<typename Mutex>
+class android_sink final : public base_sink<Mutex>
 {
 public:
-    explicit base_android_sink(std::string tag="spdlog"): _tag(tag)
-    {
-    }
-
-    void flush() override
-    {
-    }
+    explicit android_sink(std::string tag = "spdlog", bool use_raw_msg = false)
+        : tag_(std::move(tag))
+        , use_raw_msg_(use_raw_msg)
+    {}
 
 protected:
-    void _sink_it(const details::log_msg& msg) override
+    void sink_it_(const details::log_msg &msg) override
     {
-        const android_LogPriority priority = convert_to_android(msg.level);
-        const int expected_size = msg.formatted.size();
-        const int size = __android_log_write(
-                             priority, _tag.c_str(), msg.formatted.c_str()
-                         );
-        if (size > expected_size)
+        const android_LogPriority priority = convert_to_android_(msg.level);
+        fmt::memory_buffer formatted;
+        if (use_raw_msg_)
         {
-            // Will write a little bit more than original message
+            details::fmt_helper::append_string_view(msg.payload, formatted);
         }
         else
         {
-            throw spdlog_ex("Send to Android logcat failed");
+            base_sink<Mutex>::formatter_->format(msg, formatted);
+        }
+        formatted.push_back('\0');
+        const char *msg_output = formatted.data();
+
+        // See system/core/liblog/logger_write.c for explanation of return value
+        int ret = __android_log_write(priority, tag_.c_str(), msg_output);
+        int retry_count = 0;
+        while ((ret == -11 /*EAGAIN*/) && (retry_count < SPDLOG_ANDROID_RETRIES))
+        {
+            details::os::sleep_for_millis(5);
+            ret = __android_log_write(priority, tag_.c_str(), msg_output);
+            retry_count++;
+        }
+
+        if (ret < 0)
+        {
+            throw spdlog_ex("__android_log_write() failed", ret);
         }
     }
 
+    void flush_() override {}
+
 private:
-    static android_LogPriority convert_to_android(spdlog::level::level_enum level)
+    static android_LogPriority convert_to_android_(spdlog::level::level_enum level)
     {
-        switch(level)
+        switch (level)
         {
         case spdlog::level::trace:
             return ANDROID_LOG_VERBOSE;
@@ -61,30 +81,39 @@ private:
             return ANDROID_LOG_DEBUG;
         case spdlog::level::info:
             return ANDROID_LOG_INFO;
-        case spdlog::level::notice:
-            return ANDROID_LOG_INFO;
         case spdlog::level::warn:
             return ANDROID_LOG_WARN;
         case spdlog::level::err:
             return ANDROID_LOG_ERROR;
         case spdlog::level::critical:
             return ANDROID_LOG_FATAL;
-        case spdlog::level::alert:
-            return ANDROID_LOG_FATAL;
-        case spdlog::level::emerg:
-            return ANDROID_LOG_FATAL;
         default:
-            throw spdlog_ex("Incorrect level value");
+            return ANDROID_LOG_DEFAULT;
         }
     }
 
-    std::string _tag;
+    std::string tag_;
+    bool use_raw_msg_;
 };
 
-typedef base_android_sink<std::mutex> android_sink_mt;
-typedef base_android_sink<details::null_mutex> android_sink_st;
+using android_sink_mt = android_sink<std::mutex>;
+using android_sink_st = android_sink<details::null_mutex>;
+} // namespace sinks
 
-}
+// Create and register android syslog logger
+
+template<typename Factory = spdlog::synchronous_factory>
+inline std::shared_ptr<logger> android_logger_mt(const std::string &logger_name, const std::string &tag = "spdlog")
+{
+    return Factory::template create<sinks::android_sink_mt>(logger_name, tag);
 }
 
-#endif
+template<typename Factory = spdlog::synchronous_factory>
+inline std::shared_ptr<logger> android_logger_st(const std::string &logger_name, const std::string &tag = "spdlog")
+{
+    return Factory::template create<sinks::android_sink_st>(logger_name, tag);
+}
+
+} // namespace spdlog
+
+#endif // __ANDROID__

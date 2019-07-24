@@ -1,16 +1,13 @@
-//
-// Copyright(c) 2015 Gabi Melman.
+// Copyright(c) 2015-present, Gabi Melman & spdlog contributors.
 // Distributed under the MIT License (http://opensource.org/licenses/MIT)
-//
 
 #pragma once
 
-// null, no cost mutex
+#include <atomic>
+// null, no cost dummy "mutex" and dummy "atomic" int
 
-namespace spdlog
-{
-namespace details
-{
+namespace spdlog {
+namespace details {
 struct null_mutex
 {
     void lock() {}
@@ -20,5 +17,26 @@ struct null_mutex
         return true;
     }
 };
-}
-}
+
+struct null_atomic_int
+{
+    int value;
+    null_atomic_int() = default;
+
+    explicit null_atomic_int(int val)
+        : value(val)
+    {}
+
+    int load(std::memory_order) const
+    {
+        return value;
+    }
+
+    void store(int val)
+    {
+        value = val;
+    }
+};
+
+} // namespace details
+} // namespace spdlog
